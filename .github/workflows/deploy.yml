@@ -1,0 +1,37 @@
+# .github/workflows/deploy.yml
+name: Deploy to Digital Ocean
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.x'
+
+      - name: Install Aspire CLI
+        run: dotnet tool install --global aspire.cli --prerelease --source https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json
+
+      - name: Enable deploy command
+        run: aspire config set features.deployCommandEnabled true -g
+
+      - name: Deploy to Digital Ocean
+        env:
+          SSH_HOST: ${{ secrets.DO_HOST }}
+          SSH_USERNAME: ${{ secrets.DO_USERNAME }}
+          SSH_KEY: ${{ secrets.DO_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          cd samples/DockerPipelinesSample/DockerPipelinesSample.AppHost
+          aspire deploy --non-interactive
