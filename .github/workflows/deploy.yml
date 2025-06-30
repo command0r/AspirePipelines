@@ -26,20 +26,21 @@ jobs:
 
       - name: Deploy to Digital Ocean
         env:
-          # SSH Configuration
+          # ALL the configuration from the README
           DOCKERSSH__SSHHOST: ${{ secrets.DO_HOST }}
           DOCKERSSH__SSHUSERNAME: ${{ secrets.DO_USERNAME }}
-          DOCKERSSH__SSHKEYPATH: "/home/runner/.ssh/id_rsa"
           DOCKERSSH__SSHPORT: "22"
+          DOCKERSSH__SSHKEYPATH: "/home/runner/.ssh/id_rsa"
           DOCKERSSH__REMOTEDEPLOYPATH: "/home/root/aspire-app"
-          
-          # Registry Configuration  
           DOCKERSSH__REGISTRYURL: "docker.io"
           DOCKERSSH__REPOSITORYPREFIX: "commandor"
           
-          # Optional: Registry credentials (add these secrets if needed)
-          # DOCKERSSH__REGISTRYUSERNAME: ${{ secrets.DOCKER_USERNAME }}
-          # DOCKERSSH__REGISTRYPASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+          # Image and port variables that get prompted for
+          APISERVICE_IMAGE: "docker.io/commandor/apiservice:latest"
+          APISERVICE_PORT: "8080"
+          WEBFRONTEND_IMAGE: "docker.io/commandor/webfrontend:latest"
+          WEBFRONTEND_PORT: "8080"
+          CACHE_PASSWORD: "redis123!"
         
         run: |
           # Setup SSH
@@ -47,9 +48,11 @@ jobs:
           echo "${{ secrets.DO_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           
-          # Add host to known_hosts to avoid host verification prompt
+          # Add host to known_hosts
           ssh-keyscan -H ${{ secrets.DO_HOST }} >> ~/.ssh/known_hosts
           
-          # Deploy
+          # Change to the correct directory
           cd samples/DockerPipelinesSample/DockerPipelinesSample.AppHost
+          
+          # Deploy with all environment variables set
           aspire deploy
