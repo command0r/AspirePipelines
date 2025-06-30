@@ -26,12 +26,30 @@ jobs:
 
       - name: Deploy to Digital Ocean
         env:
-          SSH_HOST: ${{ secrets.DO_HOST }}
-          SSH_USERNAME: ${{ secrets.DO_USERNAME }}
-          SSH_KEY: ${{ secrets.DO_SSH_KEY }}
+          # SSH Configuration
+          DOCKERSSH__SSHHOST: ${{ secrets.DO_HOST }}
+          DOCKERSSH__SSHUSERNAME: ${{ secrets.DO_USERNAME }}
+          DOCKERSSH__SSHKEYPATH: "/home/runner/.ssh/id_rsa"
+          DOCKERSSH__SSHPORT: "22"
+          DOCKERSSH__REMOTEDEPLOYPATH: "/home/root/aspire-app"
+          
+          # Registry Configuration  
+          DOCKERSSH__REGISTRYURL: "docker.io"
+          DOCKERSSH__REPOSITORYPREFIX: "commandor"
+          
+          # Optional: Registry credentials (add these secrets if needed)
+          # DOCKERSSH__REGISTRYUSERNAME: ${{ secrets.DOCKER_USERNAME }}
+          # DOCKERSSH__REGISTRYPASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        
         run: |
+          # Setup SSH
           mkdir -p ~/.ssh
-          echo "$SSH_KEY" > ~/.ssh/id_rsa
+          echo "${{ secrets.DO_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
+          
+          # Add host to known_hosts to avoid host verification prompt
+          ssh-keyscan -H ${{ secrets.DO_HOST }} >> ~/.ssh/known_hosts
+          
+          # Deploy
           cd samples/DockerPipelinesSample/DockerPipelinesSample.AppHost
-          aspire deploy --non-interactive
+          aspire deploy
