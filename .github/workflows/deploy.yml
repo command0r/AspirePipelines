@@ -1,4 +1,4 @@
-# .github/workflows/deploy.yml
+# .github/workflows/deploy.yml  
 name: Deploy to Digital Ocean
 
 on:
@@ -18,30 +18,25 @@ jobs:
         with:
           dotnet-version: '9.x'
 
-      - name: Install Aspire CLI
-        run: dotnet tool install --global aspire.cli --prerelease --source https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json
-
-      - name: Enable deploy command
-        run: aspire config set features.deployCommandEnabled true -g
-
-      - name: Create deployment configuration
+      - name: Generate manifest
         run: |
           cd samples/DockerPipelinesSample/DockerPipelinesSample.AppHost
+          dotnet run --publisher manifest --output-path ./manifest.json
+
+      - name: Build and push images
+        env:
+          DOCKER_BUILDKIT: 1
+        run: |
+          cd samples/DockerPipelinesSample
           
-          # Create appsettings.json with deployment configuration
-          cat > appsettings.json << EOF
-          {
-            "DockerSSH": {
-              "SshHost": "${{ secrets.DO_HOST }}",
-              "SshUsername": "${{ secrets.DO_USERNAME }}",
-              "SshPort": "22",
-              "SshKeyPath": "/home/runner/.ssh/id_rsa",
-              "RemoteDeployPath": "/home/root/aspire-app",
-              "RegistryUrl": "docker.io",
-              "RepositoryPrefix": "commandor"
-            }
-          }
-          EOF
+          # Build for x86_64 (this will work on GitHub's x86_64 runners)
+          docker build -t commandor/apiservice:${{ github.sha }} ./DockerPipelinesSample.ApiService
+          docker build -t commandor/webfrontend:${{ github.sha }} ./DockerPipelinesSample.Web
+          
+          # Push to Docker Hub
+          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+          docker push commandor/apiservice:${{ github.sha }}
+          docker push commandor/webfrontend:${{ github.sha }}
 
       - name: Deploy to Digital Ocean
         run: |
@@ -49,12 +44,27 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.DO_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          
-          # Add host to known_hosts
           ssh-keyscan -H ${{ secrets.DO_HOST }} >> ~/.ssh/known_hosts
           
-          # Change to the correct directory
-          cd samples/DockerPipelinesSample/DockerPipelinesSample.AppHost
+          # Create docker-compose.yml on the server
+          ssh -i ~/.ssh/id_rsa root@${{ secrets.DO_HOST }} "mkdir -p /opt/aspire-app"
           
-          # Try deploy with --non-interactive flag
-          aspire deploy --non-interactive
+          # Upload and run docker-compose
+          cat > docker-compose.yml << EOF
+          services:
+            webfrontend:
+              image: commandor/webfrontend:${{ github.sha }}
+              ports:
+                - "80:8080"
+            apiservice:
+              image: commandor/apiservice:${{ github.sha }}
+              ports:
+                - "8080:8080"
+            redis:
+              image: redis:7.4
+              ports:
+                - "6379:6379"
+          EOF
+          
+          scp -i ~/.ssh/id_rsa docker-compose.yml root@${{ secrets.DO_HOST }}:/opt/aspire-app/
+          ssh -i ~/.ssh/id_rsa root@${{ secrets.DO_HOST }} "cd /opt/aspire-app && docker-compose up -d"
