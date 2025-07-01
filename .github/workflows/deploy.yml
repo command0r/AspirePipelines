@@ -24,24 +24,26 @@ jobs:
       - name: Enable deploy command
         run: aspire config set features.deployCommandEnabled true -g
 
-      - name: Deploy to Digital Ocean
-        env:
-          # ALL the configuration from the README
-          DOCKERSSH__SSHHOST: ${{ secrets.DO_HOST }}
-          DOCKERSSH__SSHUSERNAME: ${{ secrets.DO_USERNAME }}
-          DOCKERSSH__SSHPORT: "22"
-          DOCKERSSH__SSHKEYPATH: "/home/runner/.ssh/id_rsa"
-          DOCKERSSH__REMOTEDEPLOYPATH: "/home/root/aspire-app"
-          DOCKERSSH__REGISTRYURL: "docker.io"
-          DOCKERSSH__REPOSITORYPREFIX: "commandor"
+      - name: Create deployment configuration
+        run: |
+          cd samples/DockerPipelinesSample/DockerPipelinesSample.AppHost
           
-          # Image and port variables that get prompted for
-          APISERVICE_IMAGE: "docker.io/commandor/apiservice:latest"
-          APISERVICE_PORT: "8080"
-          WEBFRONTEND_IMAGE: "docker.io/commandor/webfrontend:latest"
-          WEBFRONTEND_PORT: "8080"
-          CACHE_PASSWORD: "redis123!"
-        
+          # Create appsettings.json with deployment configuration
+          cat > appsettings.json << EOF
+          {
+            "DockerSSH": {
+              "SshHost": "${{ secrets.DO_HOST }}",
+              "SshUsername": "${{ secrets.DO_USERNAME }}",
+              "SshPort": "22",
+              "SshKeyPath": "/home/runner/.ssh/id_rsa",
+              "RemoteDeployPath": "/home/root/aspire-app",
+              "RegistryUrl": "docker.io",
+              "RepositoryPrefix": "commandor"
+            }
+          }
+          EOF
+
+      - name: Deploy to Digital Ocean
         run: |
           # Setup SSH
           mkdir -p ~/.ssh
@@ -54,5 +56,5 @@ jobs:
           # Change to the correct directory
           cd samples/DockerPipelinesSample/DockerPipelinesSample.AppHost
           
-          # Deploy with all environment variables set
-          aspire deploy
+          # Try deploy with --non-interactive flag
+          aspire deploy --non-interactive
